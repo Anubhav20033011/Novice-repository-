@@ -35,7 +35,7 @@ const prompt = ai.definePrompt({
   name: 'handwritingToTextPrompt',
   input: {schema: HandwritingToTextInputSchema},
   output: {schema: HandwritingToTextOutputSchema},
-  prompt: `You are an OCR tool. Convert the handwritten text in the image to digital text.
+  prompt: `You are an OCR tool. Convert the handwritten text in the image to digital text. Pay close attention to paragraph and line breaks in the original image and preserve them in the output.
 
 Image: {{media url=photoDataUri}}`,
 });
