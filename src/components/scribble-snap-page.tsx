@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useId } from "react";
 import Image from "next/image";
-import { UploadCloud, Copy, Download, XCircle, FileText, Image as ImageIcon } from "lucide-react";
+import { UploadCloud, Copy, Download, XCircle, FileText, Image as ImageIcon, Trash2, FileType, BookText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -15,14 +15,27 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { getTextFromHandwriting } from "@/app/actions";
+import { getTextFromHandwriting, getSummary } from "@/app/actions";
+import jsPDF from "jspdf";
+
+interface Note {
+  id: string;
+  image: string;
+  text: string;
+  originalText: string;
+  timestamp: string;
+}
 
 export function ScribbleSnapPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [recognizedText, setRecognizedText] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isSummarizing, setIsSummarizing] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [history, setHistory] = useState<Note[]>([]);
   const { toast } = useToast();
+  const uniqueId = useId();
+
 
   const handleClear = useCallback(() => {
     if (imagePreview) {
@@ -58,7 +71,16 @@ export function ScribbleSnapPage() {
         const response = await getTextFromHandwriting({ photoDataUri: dataUri });
 
         if (response.success && response.text) {
-          setRecognizedText(response.text);
+          const newText = response.text;
+          setRecognizedText(newText);
+          const newNote: Note = {
+            id: `note-${uniqueId}-${Date.now()}`,
+            image: dataUri,
+            text: newText,
+            originalText: newText,
+            timestamp: new Date().toLocaleString(),
+          };
+          setHistory(prev => [newNote, ...prev]);
         } else {
           toast({
             title: "Recognition Failed",
@@ -79,7 +101,7 @@ export function ScribbleSnapPage() {
         handleClear();
       };
     },
-    [toast, handleClear]
+    [toast, handleClear, uniqueId]
   );
 
   const onDrop = useCallback(
@@ -108,7 +130,6 @@ export function ScribbleSnapPage() {
     if (file) {
       handleFile(file);
     }
-     // Reset input value to allow re-uploading the same file
     event.target.value = '';
   };
 
@@ -125,21 +146,71 @@ export function ScribbleSnapPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "scribble-snap-note.txt";
+    a.download = "scriptnest-snap-note.txt";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
+  const handleSummarize = async () => {
+    if (!recognizedText) return;
+    setIsSummarizing(true);
+    const response = await getSummary({ textToSummarize: recognizedText });
+    if (response.success && response.summary) {
+      setRecognizedText(response.summary);
+      setHistory(prev => prev.map(note => note.id === history[0].id ? {...note, text: response.summary!} : note));
+      toast({
+        title: "Summarized!",
+        description: "The text has been summarized.",
+      });
+    } else {
+      toast({
+        title: "Summarization Failed",
+        description: response.error || "Could not summarize the text.",
+        variant: "destructive",
+      });
+    }
+    setIsSummarizing(false);
+  };
+
+  const handleDeleteFromHistory = (id: string) => {
+    setHistory(prev => prev.filter(note => note.id !== id));
+  };
+
+  const handleExportPdf = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(12);
+    let y = 10;
+    history.forEach((note, index) => {
+      if (index > 0) {
+        doc.addPage();
+        y = 10;
+      }
+      doc.text(`Note from: ${note.timestamp}`, 10, y);
+      y += 10;
+      
+      const lines = doc.splitTextToSize(note.text, 180);
+      lines.forEach((line: string) => {
+        if (y > 280) {
+          doc.addPage();
+          y = 10;
+        }
+        doc.text(line, 10, y);
+        y += 7;
+      });
+    });
+    doc.save("scriptnest-snap-collection.pdf");
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground font-body animate-in fade-in duration-500">
       <header className="py-8 text-center">
         <h1 className="text-4xl sm:text-5xl font-bold font-headline text-primary tracking-tight">
-          ScribbleSnap
+          ScriptNest Snap
         </h1>
         <p className="mt-2 text-lg text-muted-foreground max-w-2xl mx-auto px-4">
-          Instantly convert your handwritten notes into editable digital text with AI.
+          From handwriting to digital text, with summarization and PDF export.
         </p>
       </header>
 
@@ -230,6 +301,14 @@ export function ScribbleSnapPage() {
             <CardFooter className="flex-wrap justify-end gap-2 pt-4">
               <Button
                 variant="outline"
+                onClick={handleSummarize}
+                disabled={!recognizedText || isProcessing || isSummarizing}
+              >
+                {isSummarizing ? <Loader2 className="animate-spin" /> : <BookText />}
+                Summarize
+              </Button>
+              <Button
+                variant="outline"
                 onClick={handleCopy}
                 disabled={!recognizedText || isProcessing}
               >
@@ -252,6 +331,37 @@ export function ScribbleSnapPage() {
             </CardFooter>
           </Card>
         </div>
+
+        {history.length > 0 && (
+          <div className="mt-12">
+            <div className="flex justify-between items-center mb-4">
+                 <h2 className="text-2xl font-bold font-headline">Note History</h2>
+                 <Button onClick={handleExportPdf} disabled={history.length === 0}>
+                    <FileType /> Export All as PDF
+                 </Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {history.map((note) => (
+                <Card key={note.id} className="flex flex-col">
+                  <CardHeader>
+                      <div className="aspect-video relative w-full rounded-md overflow-hidden border">
+                           <Image src={note.image} alt="note preview" layout="fill" objectFit="cover"/>
+                      </div>
+                  </CardHeader>
+                  <CardContent className="flex-grow">
+                    <p className="text-xs text-muted-foreground mb-2">{note.timestamp}</p>
+                    <p className="text-sm line-clamp-4 font-code">{note.text}</p>
+                  </CardContent>
+                  <CardFooter className="flex justify-end gap-2">
+                     <Button variant="ghost" size="icon" onClick={() => handleDeleteFromHistory(note.id)}>
+                        <Trash2 className="w-5 h-5 text-destructive"/>
+                     </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

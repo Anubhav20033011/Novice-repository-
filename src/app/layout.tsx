@@ -3,8 +3,8 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'ScribbleSnap',
-  description: 'Convert your handwritten notes to digital text in a snap.',
+  title: 'ScriptNest Snap',
+  description: 'From handwriting to digital text, with summarization and PDF export.',
 };
 
 export default function RootLayout({

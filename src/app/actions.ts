@@ -4,6 +4,7 @@ import {
   handwritingToText,
   type HandwritingToTextInput,
 } from '@/ai/flows/handwriting-to-text';
+import { summarizeText, type SummarizeTextInput } from '@/ai/flows/summarize-text';
 
 export async function getTextFromHandwriting(input: HandwritingToTextInput) {
   try {
@@ -17,6 +18,22 @@ export async function getTextFromHandwriting(input: HandwritingToTextInput) {
     return {
       success: false,
       error: 'Failed to recognize text. Please try a clearer image.',
+    };
+  }
+}
+
+export async function getSummary(input: SummarizeTextInput) {
+  try {
+    const result = await summarizeText(input);
+    if (!result || !result.summary) {
+        return { success: false, error: 'The AI returned an empty response.' };
+    }
+    return { success: true, summary: result.summary };
+  } catch (error) {
+    console.error('Error in summarize text flow:', error);
+    return {
+      success: false,
+      error: 'Failed to summarize text.',
     };
   }
 }
