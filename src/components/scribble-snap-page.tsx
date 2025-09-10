@@ -345,7 +345,7 @@ export function ScribbleSnapPage() {
                 <Card key={note.id} className="flex flex-col">
                   <CardHeader>
                       <div className="aspect-video relative w-full rounded-md overflow-hidden border">
-                           <Image src={note.image} alt="note preview" layout="fill" objectFit="cover"/>
+                           <Image src={note.image} alt="note preview" fill style={{ objectFit: 'cover' }}/>
                       </div>
                   </CardHeader>
                   <CardContent className="flex-grow">
